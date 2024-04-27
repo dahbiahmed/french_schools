@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html style="height: 100%;">
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <script src='https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js'></script>
         <link href='https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css' rel='stylesheet' />
         <style>
@@ -43,23 +44,40 @@
         
             @media (max-width: 600px) {
                 .filter-panel {
-                    position: fixed;
+                    position: sticky;
                     bottom: 0;
                     left: 0;
-                    width: 100%;
-                    height: auto;
-                    flex-direction: column;
+                    right: 0;
+                    width: auto;
+                    height: fit-content;
                     padding: 10px;
-                    border-radius: 0;
+                    padding-bottom: 40px;
+                    z-index: 2;
                     box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                    border-radius: 10px 10px 0 0; /* Rounded corners at the top */
+                    transition: transform 0.3s ease-in-out; /* Smooth transition for transform */
+                    transform: translateY(0%); /* Start fully visible */
+                    background: #fff; /* Ensure background is solid */
+                    overflow: hidden; /* Hide overflow */
+                }
+                .filter-panel.closed {
+                    transform: translateY(100%); /* Hide off screen when closed */
+                }
+                .panel-handle {
+                    width: 35px;
+                    height: 4px;
+                    background-color: #ccc;
+                    border-radius: 2px;
+                    margin: 5px auto 10px; /* Centered horizontally */
                 }
                 .filter-panel label {
-                    width: 100%; /* Ensure labels take full width */
-                    margin: 5px 0; /* Reduce margin */
+                    flex: 1 0 100%; /* Full width for each label */
+                    margin: 5px 0; /* Reduced margin */
+                    font-size: 12px; /* Smaller font size */
                 }
                 .filter-panel input,
                 .filter-panel select {
-                    width: calc(100% - 10px); /* Full width minus padding */
+                    font-size: 12px; /* Smaller font size */
                 }
             }
         </style>
@@ -68,6 +86,7 @@
 
 <div id='map'></div>
 <div class="filter-panel">
+    <div class="panel-handle"></div>
     <label>
         Min IPS percentile: <span id="minIpsPercentileValue">0</span>
         <input type="range" id="minIpsPercentile" min="0" max="100" value="50" step="0.1">
@@ -90,7 +109,9 @@ var map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/light-v10',
     center: [1.888334, 46.603354],
-    zoom: 6
+    zoom: 6,
+    pitchWithRotate: false,
+    dragRotate: false
 });
 
 // A simple hash function to convert a string into a color
