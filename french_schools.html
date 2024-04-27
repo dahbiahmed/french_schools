@@ -21,27 +21,47 @@
                 width: 300px;
             }
             .filter-panel label {
-            display: flex;
-            flex-direction: column;
-            font-size: 14px;
-            color: #333;
+                display: flex;
+                flex-direction: column;
+                font-size: 14px;
+                color: #333;
             }
-
             .filter-panel input,
             .filter-panel select {
                 padding: 5px;
                 font-size: 14px;
                 border-radius: 8px;
-
             }
             .mapboxgl-popup {
                 max-width: 300px;
                 font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
             }
-
             .mapboxgl-popup-content {
                 padding: 15px;
                 border-radius: 10px;
+            }
+        
+            @media (max-width: 600px) {
+                .filter-panel {
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    width: 100%;
+                    height: auto;
+                    flex-direction: column;
+                    padding: 10px;
+                    border-radius: 0;
+                    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                }
+                .filter-panel label {
+                    width: 100%; /* Ensure labels take full width */
+                    margin: 5px 0; /* Reduce margin */
+                }
+                .filter-panel input,
+                .filter-panel select {
+                    width: calc(100% - 10px); /* Full width minus padding */
+                }
+            }
         </style>
     </head>
 <body>
@@ -68,11 +88,52 @@
 mapboxgl.accessToken = 'pk.eyJ1IjoiZGFoYmlhaG1lZCIsImEiOiJjbHZlYmRrZ3kwN2t2MmpudmV5bnd0OTI3In0.qp6N0FK3t5LqZWy2DqUKsQ';
 var map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/streets-v11',
+    style: 'mapbox://styles/mapbox/light-v10',
     center: [1.888334, 46.603354],
     zoom: 6
 });
 
+// A simple hash function to convert a string into a color
+function hashStringToColor(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    var color = '#';
+    for (var i = 0; i < 3; i++) {
+        var value = (hash >> (i * 8)) & 0xFF;
+        color += ('00' + value.toString(16)).substr(-2);
+    }
+    return color;
+}
+
+// Fetch the GeoJSON data
+fetch('paris_carte_scolaire.geojson')
+    .then(response => response.json())
+    .then(data => {
+        // Add a color property to each feature based on the hash of the "libelle" property
+        data.features.forEach(function(feature) {
+            feature.properties.color = hashStringToColor(feature.properties.libelle);
+        });
+
+        // Add the source
+        map.addSource('paris_carte_scolaire', {
+            type: 'geojson',
+            data: data
+        });
+
+        // Add the layer
+        map.addLayer({
+            id: 'paris_carte_scolaire',
+            type: 'fill',
+            source: 'paris_carte_scolaire',
+            minzoom: 12,
+            paint: {
+                'fill-color': ['get', 'color'], // Use the assigned color
+                'fill-opacity': 0.05
+            }
+        });
+    });
 // Fetch the JSON data from the file
 fetch('schools_data.json')
     .then(response => response.json())
@@ -158,6 +219,11 @@ fetch('schools_data.json')
                 });
             }
         }
+        map.on('load', function() {
+            if (map.getLayer('schools') && map.getLayer('pris_carte_scolaire')) {
+                map.moveLayer('schools');
+            }
+        });
         // Update the map initially and whenever the inputs change
         updateMap();
         minIpsPercentileInput.addEventListener('input', updateMap);
