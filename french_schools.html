@@ -87,6 +87,11 @@
 <div id='map'></div>
 <div class="filter-panel">
     <div class="panel-handle"></div>
+    Type:
+    <select id="type">
+        <option value="schools_data.json">Schools</option>
+        <option value="lycee_data.json">High Schools</option>
+    </select>
     <label>
         Min IPS percentile: <span id="minIpsPercentileValue">0</span>
         <input type="range" id="minIpsPercentile" min="0" max="100" value="50" step="0.1">
@@ -114,7 +119,7 @@ var map = new mapboxgl.Map({
     dragRotate: false
 });
 
-// A simple hash function to convert a string into a color
+// A hash function to convert a string into a color - used for carte scolaire
 function hashStringToColor(str) {
     var hash = 0;
     for (var i = 0; i < str.length; i++) {
@@ -163,7 +168,18 @@ fetch('schools_data.json')
         var minIpsPercentileValue = document.getElementById('minIpsPercentileValue');
         var minIpsPercentileInput = document.getElementById('minIpsPercentile');
         var statutInput = document.getElementById('statut');
+        var typeInput = document.getElementById('type');
 
+            // Function to fetch data
+        function fetchData() {
+            var type = typeInput.value;
+            fetch(type)
+                .then(response => response.json())
+                .then(data => {
+                    schools = data;
+                    updateMap();
+                });
+        }
         // Function to update the map
         function updateMap() {
             // Get the current values of the inputs
@@ -223,20 +239,37 @@ fetch('schools_data.json')
 
                 // Add a popup when a point is clicked
                 map.on('click', 'schools', function(e) {
-                var coordinates = e.features[0].geometry.coordinates.slice();
-                var school = e.features[0].properties;
+                    var coordinates = e.features[0].geometry.coordinates.slice();
+                    var school = e.features[0].properties;
 
-                new mapboxgl.Popup()
-                    .setLngLat(coordinates)
-                    .setHTML(`
-                        <h3>${school['nom_etablissement']}</h3>
-                        <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
-                        <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
-                        <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
-                        <p><strong>Commune:</strong> ${school['nom_commune']}</p>
-                        <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
-                    `)
-                    .addTo(map);
+                    var popupContent = '';
+                    if (typeInput.value === 'schools_data.json') {
+                        popupContent = `
+                            <h3>${school['nom_etablissement']}</h3>
+                            <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
+                            <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
+                            <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
+                            <p><strong>Commune:</strong> ${school['nom_commune']}</p>
+                            <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
+                        `;
+                    } else if (typeInput.value === 'lycee_data.json') {
+                        // Modify this part to show the data you want for High Schools
+                        popupContent = `
+                            <h3>${school['nom_etablissement']}</h3>
+                            <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
+                            <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
+                            <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
+                            <p><strong>Valeur ajoutée:</strong> ${school['valeur_ajoutee_du_taux_de_mentions_gnle']}</p>
+                            <p><strong>Nb mention TB:</strong> ${school['nb_mention_tb']}</p>
+                            <p><strong>Commune:</strong> ${school['nom_commune']}</p>
+                            <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
+                        `;
+                    }
+
+                    new mapboxgl.Popup()
+                        .setLngLat(coordinates)
+                        .setHTML(popupContent)
+                        .addTo(map);
                 });
             }
         }
@@ -246,7 +279,8 @@ fetch('schools_data.json')
             }
         });
         // Update the map initially and whenever the inputs change
-        updateMap();
+        fetchData();
+        typeInput.addEventListener('change', fetchData);
         minIpsPercentileInput.addEventListener('input', updateMap);
         statutInput.addEventListener('change', updateMap);
         minIpsPercentileValue.textContent = minIpsPercentileInput.value;
