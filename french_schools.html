@@ -160,132 +160,136 @@ fetch('paris_carte_scolaire.geojson')
             }
         });
     });
-// Fetch the JSON data from the file
-fetch('schools_data.json')
-    .then(response => response.json())
-    .then(schools => {
-        // Get the input elements
-        var minIpsPercentileValue = document.getElementById('minIpsPercentileValue');
-        var minIpsPercentileInput = document.getElementById('minIpsPercentile');
-        var statutInput = document.getElementById('statut');
-        var typeInput = document.getElementById('type');
+    // Get the input elements
+    var minIpsPercentileValue = document.getElementById('minIpsPercentileValue');
+    var minIpsPercentileInput = document.getElementById('minIpsPercentile');
+    var statutInput = document.getElementById('statut');
+    var typeInput = document.getElementById('type');
+    
+    // Fetch the JSON data from the file
+    fetch(typeInput.value)
+        .then(response => response.json())
+        .then(schools => {
+                // Function to fetch data
+            function fetchData() {
+                var type = typeInput.value;
+                fetch(type)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (type === 'lycee_data.json') {
+                            // Filter out high schools with an empty value for taux_de_reussite_gnle
+                            data = data.filter(school => school.taux_de_reussite_gnle !== '');
+                        }
+                        schools = data;
+                        updateMap();
+                    });
+            }
+            // Function to update the map
+            function updateMap() {
+                // Get the current values of the inputs
+                var minIpsPercentile = minIpsPercentileInput.value;
+                var statut = statutInput.value;
+                minIpsPercentileValue.textContent = minIpsPercentile;
 
-            // Function to fetch data
-        function fetchData() {
-            var type = typeInput.value;
-            fetch(type)
-                .then(response => response.json())
-                .then(data => {
-                    schools = data;
-                    updateMap();
+                // Filter schools based on the inputs
+                var filteredSchools = schools.filter(function(school) {
+                    return school.ips_percentile_global > minIpsPercentile &&
+                        (statut === '' || school.prive_vs_public === statut);
                 });
-        }
-        // Function to update the map
-        function updateMap() {
-            // Get the current values of the inputs
-            var minIpsPercentile = minIpsPercentileInput.value;
-            var statut = statutInput.value;
-            minIpsPercentileValue.textContent = minIpsPercentile;
 
-            // Filter schools based on the inputs
-            var filteredSchools = schools.filter(function(school) {
-                return school.ips_percentile_global > minIpsPercentile &&
-                    (statut === '' || school.prive_vs_public === statut);
+                // Convert the array of schools to a GeoJSON FeatureCollection
+                var geojson = {
+                    type: 'FeatureCollection',
+                    features: filteredSchools.map(function(school) {
+                        return {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [school.lon, school.lat]
+                            },
+                            properties: school
+                        };
+                    })
+                };
+
+                // If the source already exists, update it
+                if (map.getSource('schools')) {
+                    map.getSource('schools').setData(geojson);
+                } else {
+                    // Otherwise, add the source
+                    map.addSource('schools', {
+                        type: 'geojson',
+                        data: geojson
+                    });
+
+                    // And add a layer for the schools
+                    map.addLayer({
+                        id: 'schools',
+                        type: 'circle',
+                        source: 'schools',
+                        paint: {
+                            'circle-color': [
+                                'interpolate',
+                                ['linear'],
+                                ['get', 'ips_percentile_global'],
+                                0, 'red',
+                                100, 'green'
+                            ],
+                            'circle-radius': 4,
+                            'circle-stroke-width': 1,
+                            'circle-stroke-color': '#fff'
+                        }
+                    });
+
+                    // Add a popup when a point is clicked
+                    map.on('click', 'schools', function(e) {
+                        var coordinates = e.features[0].geometry.coordinates.slice();
+                        var school = e.features[0].properties;
+
+                        var popupContent = '';
+                        if (typeInput.value === 'schools_data.json') {
+                            popupContent = `
+                                <h3>${school['nom_etablissement']}</h3>
+                                <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
+                                <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
+                                <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
+                                <p><strong>Commune:</strong> ${school['nom_commune']}</p>
+                                <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
+                            `;
+                        } else if (typeInput.value === 'lycee_data.json') {
+                            // Modify this part to show the data you want for High Schools
+                            popupContent = `
+                                <h3>${school['nom_etablissement']}</h3>
+                                <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
+                                <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
+                                <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
+                                <p><strong>Valeur ajoutée:</strong> ${school['valeur_ajoutee_du_taux_de_mentions_gnle']}</p>
+                                <p><strong>Nb mention TB:</strong> ${school['nb_mention_tb']}</p>
+                                <p><strong>Commune:</strong> ${school['nom_commune']}</p>
+                                <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
+                            `;
+                        }
+
+                        new mapboxgl.Popup()
+                            .setLngLat(coordinates)
+                            .setHTML(popupContent)
+                            .addTo(map);
+                    });
+                }
+            }
+            map.on('load', function() {
+                if (map.getLayer('schools') && map.getLayer('pris_carte_scolaire')) {
+                    map.moveLayer('schools');
+                }
             });
+            // Update the map initially and whenever the inputs change
+            fetchData();
+            typeInput.addEventListener('change', fetchData);
+            minIpsPercentileInput.addEventListener('input', updateMap);
+            statutInput.addEventListener('change', updateMap);
+            minIpsPercentileValue.textContent = minIpsPercentileInput.value;
 
-            // Convert the array of schools to a GeoJSON FeatureCollection
-            var geojson = {
-                type: 'FeatureCollection',
-                features: filteredSchools.map(function(school) {
-                    return {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'Point',
-                            coordinates: [school.lon, school.lat]
-                        },
-                        properties: school
-                    };
-                })
-            };
-
-            // If the source already exists, update it
-            if (map.getSource('schools')) {
-                map.getSource('schools').setData(geojson);
-            } else {
-                // Otherwise, add the source
-                map.addSource('schools', {
-                    type: 'geojson',
-                    data: geojson
-                });
-
-                // And add a layer for the schools
-                map.addLayer({
-                    id: 'schools',
-                    type: 'circle',
-                    source: 'schools',
-                    paint: {
-                        'circle-color': [
-                            'interpolate',
-                            ['linear'],
-                            ['get', 'ips_percentile_global'],
-                            0, 'red',
-                            100, 'green'
-                        ],
-                        'circle-radius': 4,
-                        'circle-stroke-width': 1,
-                        'circle-stroke-color': '#fff'
-                    }
-                });
-
-                // Add a popup when a point is clicked
-                map.on('click', 'schools', function(e) {
-                    var coordinates = e.features[0].geometry.coordinates.slice();
-                    var school = e.features[0].properties;
-
-                    var popupContent = '';
-                    if (typeInput.value === 'schools_data.json') {
-                        popupContent = `
-                            <h3>${school['nom_etablissement']}</h3>
-                            <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
-                            <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
-                            <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
-                            <p><strong>Commune:</strong> ${school['nom_commune']}</p>
-                            <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
-                        `;
-                    } else if (typeInput.value === 'lycee_data.json') {
-                        // Modify this part to show the data you want for High Schools
-                        popupContent = `
-                            <h3>${school['nom_etablissement']}</h3>
-                            <p><strong>Statut:</strong> ${school['prive_vs_public']}</p>
-                            <p><strong>IPS Global Percentile:</strong> ${school['ips_percentile_global']}</p>
-                            <p><strong>IPS Score:</strong> ${school['ips_score']}</p>
-                            <p><strong>Valeur ajoutée:</strong> ${school['valeur_ajoutee_du_taux_de_mentions_gnle']}</p>
-                            <p><strong>Nb mention TB:</strong> ${school['nb_mention_tb']}</p>
-                            <p><strong>Commune:</strong> ${school['nom_commune']}</p>
-                            <p><strong>Price per Square Meter:</strong> ${school['prix_metre_carre_commune']}</p>
-                        `;
-                    }
-
-                    new mapboxgl.Popup()
-                        .setLngLat(coordinates)
-                        .setHTML(popupContent)
-                        .addTo(map);
-                });
-            }
-        }
-        map.on('load', function() {
-            if (map.getLayer('schools') && map.getLayer('pris_carte_scolaire')) {
-                map.moveLayer('schools');
-            }
         });
-        // Update the map initially and whenever the inputs change
-        fetchData();
-        typeInput.addEventListener('change', fetchData);
-        minIpsPercentileInput.addEventListener('input', updateMap);
-        statutInput.addEventListener('change', updateMap);
-        minIpsPercentileValue.textContent = minIpsPercentileInput.value;
-
-    });
 </script>
 
 </body>
